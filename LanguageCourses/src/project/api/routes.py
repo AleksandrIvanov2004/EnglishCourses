@@ -1,7 +1,7 @@
 from fastapi import APIRouter
-from src.project.infrastructure.postgres.repository.user_repo import UserRepository
-from src.project.infrastructure.postgres.database import PostgresDatabase
-from src.project.schemas.user import UserSchema
+from project.infrastructure.postgres.repository.user_repo import UserRepository
+from project.infrastructure.postgres.database import PostgresDatabase
+from project.schemas.user import UserSchema
 router = APIRouter()
 @router.get("/all_users", response_model=list[UserSchema])
 async def get_all_users() -> list[UserSchema]:

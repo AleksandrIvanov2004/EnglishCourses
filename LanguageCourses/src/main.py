@@ -27,7 +27,7 @@ def create_app() -> FastAPI:
     return app
 app = create_app()
 async def run() -> None:
-    config = uvicorn.Config("main:app", host="0.0.0.0", port=8000, reload=False)
+    config = uvicorn.Config("main:app", host="0.0.0.0", port=8007, reload=False)
     server = uvicorn.Server(config=config)
     tasks = (
         asyncio.create_task(server.serve()),

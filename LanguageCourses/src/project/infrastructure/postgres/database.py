@@ -3,7 +3,7 @@ from typing import Any, AsyncIterator, Dict
 from sqlalchemy import JSON, MetaData, String
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from src.project.core.config import settings
+from project.core.config import settings
 class PostgresDatabase:
     def __init__(self) -> None:
         self._engine = create_async_engine(settings.postgres_url)

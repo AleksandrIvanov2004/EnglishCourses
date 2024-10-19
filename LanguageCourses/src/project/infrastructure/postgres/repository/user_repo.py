@@ -1,9 +1,9 @@
 from typing import Type
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
-from src.project.schemas.user import UserSchema
-from src.project.infrastructure.postgres.models import User
-from src.project.core.config import settings
+from project.schemas.user import UserSchema
+from project.infrastructure.postgres.models import User
+from project.core.config import settings
 class UserRepository:
     _collection: Type[User] = User
     async def check_connection(
