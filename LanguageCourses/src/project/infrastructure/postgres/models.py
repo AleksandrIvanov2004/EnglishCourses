@@ -11,9 +11,10 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     age: Mapped[int] = mapped_column(nullable=False)
     email: Mapped[str] = mapped_column(nullable=False, unique=True)
-    password: Mapped[str] = mapped_column(nullable=False, unique=True)
+    password: Mapped[str] = mapped_column(nullable=False)
     first_name: Mapped[str] = mapped_column(nullable=False)
     second_name: Mapped[str] = mapped_column(nullable=False)
+    role: Mapped[str] = mapped_column(nullable=False)
 
 class Course(Base):
     __tablename__ = "courses"

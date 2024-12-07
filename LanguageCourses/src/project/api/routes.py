@@ -1,6 +1,6 @@
 from tokenize import group
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
 from project.infrastructure.postgres.repository.change_of_groups_repo import ChangeOfGroupsRepository
 from project.infrastructure.postgres.repository.group_repo import GroupRepository
@@ -29,10 +29,13 @@ from project.schemas.user import UserSchema
 from project.schemas.course import CourseSchema
 from project.schemas.users_and_groups import UsersAndGroupsSchema
 from project.schemas.users_has_schedule import UsersHasScheduleSchema
+from project.schemas.login import  LoginSchema
+from project.schemas.register import RegisterSchema
+from project.infrastructure.security.auth import get_current_user, allow_only_admin
 
 router = APIRouter()
 @router.get("/all_users", response_model=list[UserSchema])
-async def get_all_users() -> list[UserSchema]:
+async def get_all_users(current_user: dict = Depends(get_current_user)) -> list[UserSchema]:
     user_repo = UserRepository()
     database = PostgresDatabase()
 
@@ -58,14 +61,14 @@ async def get_user_by_id(id: int) -> UserSchema:
 
 
 @router.post("/users", response_model=UserSchema)
-async def insert_user(user: UserSchema) -> UserSchema:
+async def insert_user(user: UserSchema, current_user: dict = Depends(allow_only_admin)) -> UserSchema:
     user_repo = UserRepository()
     database = PostgresDatabase()
 
     async with database.session() as session:
         await user_repo.check_connection(session=session)
         new_user = await user_repo.insert_user(session=session, age=user.age, email=user.email, password=user.password
-                                               , first_name=user.first_name, second_name=user.second_name)
+                                               , first_name=user.first_name, second_name=user.second_name, role=user.role)
 
     if not new_user:
         raise HTTPException(status_code=500, detail="Failed to insert user")
@@ -74,7 +77,7 @@ async def insert_user(user: UserSchema) -> UserSchema:
 
 
 @router.delete("/users/{id}", response_model=dict)
-async def delete_user_by_id(id: int) -> dict:
+async def delete_user_by_id(id: int, current_user: dict = Depends(allow_only_admin)) -> dict:
     user_repo = UserRepository()
     database = PostgresDatabase()
 
@@ -89,18 +92,52 @@ async def delete_user_by_id(id: int) -> dict:
 
 
 @router.put("/users/{id}", response_model=UserSchema)
-async def update_user_by_id(id: int, users: UserSchema) -> UserSchema:
+async def update_user_by_id(id: int, users: UserSchema
+                            , current_user: dict = Depends(allow_only_admin)) -> UserSchema:
     user_repo = UserRepository()
     database = PostgresDatabase()
 
     async with database.session() as session:
         await user_repo.check_connection(session=session)
-        updated_user = await user_repo.update_user_by_id(session=session, id_user=id, age=users.age, email=users.email, password=users.password, first_name=users.first_name, second_name=users.second_name)
+        updated_user = await user_repo.update_user_by_id(session=session, id_user=id, age=users.age, email=users.email, password=users.password, first_name=users.first_name, second_name=users.second_name, role=users.role)
 
     if not updated_user:
         raise HTTPException(status_code=404, detail="User not found or failed to update")
 
     return updated_user
+
+
+@router.post("/register", response_model=UserSchema)
+async def register(user: RegisterSchema) -> UserSchema:
+    users_repo = UserRepository()
+    database = PostgresDatabase()
+
+    async with database.session() as session:
+        await users_repo.check_connection(session=session)
+        new_user = await users_repo.register_user(session=session,
+                                                  age=user.age,
+                                                  email=user.email,
+                                                  passw=user.password,
+                                                  first_name=user.first_name,
+                                                  second_name=user.second_name,
+                                                  role=user.role)
+
+    if not new_user:
+        raise HTTPException(status_code=500, detail="Failed to register user")
+
+    return new_user
+
+
+@router.post("/login")
+async def login(user: LoginSchema) -> dict:
+    users_repo = UserRepository()
+    database = PostgresDatabase()
+
+    async with database.session() as session:
+        await users_repo.check_connection(session=session)
+        auth_response = await users_repo.login_user(session=session, email=user.email, passw=user.password)
+
+    return auth_response
 
 
 
@@ -131,7 +168,7 @@ async def get_course_by_id(id: int) -> CourseSchema:
 
 
 @router.post("/courses", response_model=CourseSchema)
-async def insert_course(course: CourseSchema) -> CourseSchema:
+async def insert_course(course: CourseSchema, current_user: dict = Depends(allow_only_admin)) -> CourseSchema:
     course_repo = CourseRepository()
     database = PostgresDatabase()
 
@@ -146,7 +183,7 @@ async def insert_course(course: CourseSchema) -> CourseSchema:
 
 
 @router.delete("/courses/{id}", response_model=dict)
-async def delete_course_by_id(id: int) -> dict:
+async def delete_course_by_id(id: int, current_user: dict = Depends(allow_only_admin)) -> dict:
     course_repo = CourseRepository()
     database = PostgresDatabase()
 
@@ -161,7 +198,8 @@ async def delete_course_by_id(id: int) -> dict:
 
 
 @router.put("/courses/{id}", response_model=CourseSchema)
-async def update_course_by_id(id: int, course: CourseSchema) -> CourseSchema:
+async def update_course_by_id(id: int, course: CourseSchema
+                              , current_user: dict = Depends(allow_only_admin)) -> CourseSchema:
     course_repo = CourseRepository()
     database = PostgresDatabase()
 
@@ -203,7 +241,7 @@ async def get_group_by_number(number: int) -> GroupSchema:
 
 
 @router.post("/groups", response_model=GroupSchema)
-async def insert_group(group: GroupSchema) -> GroupSchema:
+async def insert_group(group: GroupSchema, current_user: dict = Depends(allow_only_admin)) -> GroupSchema:
     group_repo = GroupRepository()
     database = PostgresDatabase()
 
@@ -219,7 +257,7 @@ async def insert_group(group: GroupSchema) -> GroupSchema:
 
 
 @router.delete("/groups/{number}", response_model=dict)
-async def delete_group_by_number(number: int) -> dict:
+async def delete_group_by_number(number: int, current_user: dict = Depends(allow_only_admin)) -> dict:
     group_repo = GroupRepository()
     database = PostgresDatabase()
 
@@ -234,7 +272,8 @@ async def delete_group_by_number(number: int) -> dict:
 
 
 @router.put("/groups/{number}", response_model=GroupSchema)
-async def update_group_by_number(number: int, group: GroupSchema) -> GroupSchema:
+async def update_group_by_number(number: int, group: GroupSchema
+                                 , current_user: dict = Depends(allow_only_admin)) -> GroupSchema:
     group_repo = GroupRepository()
     database = PostgresDatabase()
 
@@ -277,7 +316,7 @@ async def get_teacher_by_id(id: int) -> TeacherSchema:
 
 
 @router.post("/teachers", response_model=TeacherSchema)
-async def insert_teacher(teacher: TeacherSchema) -> TeacherSchema:
+async def insert_teacher(teacher: TeacherSchema, current_user: dict = Depends(allow_only_admin)) -> TeacherSchema:
     teacher_repo = TeacherRepository()
     database = PostgresDatabase()
 
@@ -293,7 +332,7 @@ async def insert_teacher(teacher: TeacherSchema) -> TeacherSchema:
 
 
 @router.delete("/teachers/{id}", response_model=dict)
-async def delete_teacher_by_id(id: int) -> dict:
+async def delete_teacher_by_id(id: int, current_user: dict = Depends(allow_only_admin)) -> dict:
     teacher_repo = TeacherRepository()
     database = PostgresDatabase()
 
@@ -308,7 +347,8 @@ async def delete_teacher_by_id(id: int) -> dict:
 
 
 @router.put("/teachers/{id}", response_model=TeacherSchema)
-async def update_teacher(id: int, teacher: TeacherSchema) -> TeacherSchema:
+async def update_teacher(id: int, teacher: TeacherSchema
+                         , current_user: dict = Depends(allow_only_admin)) -> TeacherSchema:
     teacher_repo = TeacherRepository()
     database = PostgresDatabase()
 
@@ -352,7 +392,7 @@ async def get_payment_by_id(id: int) -> PaymentSchema:
 
 
 @router.post("/payments", response_model=PaymentSchema)
-async def insert_payment(payment: PaymentSchema) -> PaymentSchema:
+async def insert_payment(payment: PaymentSchema, current_user: dict = Depends(allow_only_admin)) -> PaymentSchema:
     payment_repo = PaymentRepository()
     database = PostgresDatabase()
 
@@ -368,7 +408,7 @@ async def insert_payment(payment: PaymentSchema) -> PaymentSchema:
 
 
 @router.delete("/payments/{id}", response_model=dict)
-async def delete_payment_by_id(id: int) -> dict:
+async def delete_payment_by_id(id: int, current_user: dict = Depends(allow_only_admin)) -> dict:
     payment_repo = PaymentRepository()
     database = PostgresDatabase()
 
@@ -383,7 +423,8 @@ async def delete_payment_by_id(id: int) -> dict:
 
 
 @router.put("/payments/{id}", response_model=PaymentSchema)
-async def update_payment_by_id(id: int, payment: PaymentSchema) -> PaymentSchema:
+async def update_payment_by_id(id: int, payment: PaymentSchema
+                               , current_user: dict = Depends(allow_only_admin)) -> PaymentSchema:
     payment_repo = PaymentRepository()
     database = PostgresDatabase()
 
@@ -428,7 +469,7 @@ async def get_lesson_by_id(id: int) -> LessonSchema:
 
 
 @router.post("/lessons", response_model=LessonSchema)
-async def insert_lesson(lesson: LessonSchema) -> LessonSchema:
+async def insert_lesson(lesson: LessonSchema, current_user: dict = Depends(allow_only_admin)) -> LessonSchema:
     lesson_repo = LessonRepository()
     database = PostgresDatabase()
 
@@ -443,7 +484,7 @@ async def insert_lesson(lesson: LessonSchema) -> LessonSchema:
 
 
 @router.delete("/lessons/{id}", response_model=dict)
-async def delete_lesson_by_id(id: int) -> dict:
+async def delete_lesson_by_id(id: int, current_user: dict = Depends(allow_only_admin)) -> dict:
     lesson_repo = LessonRepository()
     database = PostgresDatabase()
 
@@ -458,7 +499,8 @@ async def delete_lesson_by_id(id: int) -> dict:
 
 
 @router.put("/lessons/{id}", response_model=LessonSchema)
-async def update_lesson(id: int, lesson: LessonSchema) -> LessonSchema:
+async def update_lesson(id: int, lesson: LessonSchema
+                        , current_user: dict = Depends(allow_only_admin)) -> LessonSchema:
     lesson_repo = LessonRepository()
     database = PostgresDatabase()
 
@@ -501,7 +543,7 @@ async def get_change_of_groups_by_id(id: int) -> ChangeOfGroupsSchema:
 
 
 @router.post("/changes_of_groups", response_model=ChangeOfGroupsSchema)
-async def insert_change_of_groups(change: ChangeOfGroupsSchema) -> ChangeOfGroupsSchema:
+async def insert_change_of_groups(change: ChangeOfGroupsSchema, current_user: dict = Depends(allow_only_admin)) -> ChangeOfGroupsSchema:
     change_of_groups_repo = ChangeOfGroupsRepository()
     database = PostgresDatabase()
 
@@ -519,7 +561,7 @@ async def insert_change_of_groups(change: ChangeOfGroupsSchema) -> ChangeOfGroup
 
 
 @router.delete("/changes_of_groups/{id}", response_model=dict)
-async def delete_change_of_groups_by_id(id: int) -> dict:
+async def delete_change_of_groups_by_id(id: int, current_user: dict = Depends(allow_only_admin)) -> dict:
     change_of_groups_repo = ChangeOfGroupsRepository()
     database = PostgresDatabase()
 
@@ -534,7 +576,8 @@ async def delete_change_of_groups_by_id(id: int) -> dict:
 
 
 @router.put("/changes_of_groups/{id}", response_model=ChangeOfGroupsSchema)
-async def update_change_of_groups_by_id(id: int, change: ChangeOfGroupsSchema) -> ChangeOfGroupsSchema:
+async def update_change_of_groups_by_id(id: int, change: ChangeOfGroupsSchema
+                                        , current_user: dict = Depends(allow_only_admin)) -> ChangeOfGroupsSchema:
     change_of_groups_repo = ChangeOfGroupsRepository()
     database = PostgresDatabase()
 
@@ -579,7 +622,8 @@ async def get_schedule_by_id(id: int) -> ScheduleSchema:
 
 
 @router.post("/schedules", response_model=ScheduleSchema)
-async def insert_schedule(schedule: ScheduleSchema) -> ScheduleSchema:
+async def insert_schedule(schedule: ScheduleSchema
+                          , current_user: dict = Depends(allow_only_admin)) -> ScheduleSchema:
     schedule_repo = ScheduleRepository()
     database = PostgresDatabase()
 
@@ -598,7 +642,7 @@ async def insert_schedule(schedule: ScheduleSchema) -> ScheduleSchema:
 
 
 @router.delete("/schedules/{id}", response_model=dict)
-async def delete_schedule_by_id(id: int) -> dict:
+async def delete_schedule_by_id(id: int, current_user: dict = Depends(allow_only_admin)) -> dict:
     schedule_repo = ScheduleRepository()
     database = PostgresDatabase()
 
@@ -613,7 +657,8 @@ async def delete_schedule_by_id(id: int) -> dict:
 
 
 @router.put("/schedules/{id}", response_model=ScheduleSchema)
-async def update_schedule_by_id(id: int, schedule: ScheduleSchema) -> ScheduleSchema:
+async def update_schedule_by_id(id: int, schedule: ScheduleSchema
+                                , current_user: dict = Depends(allow_only_admin)) -> ScheduleSchema:
     schedule_repo = ScheduleRepository()
     database = PostgresDatabase()
 
@@ -659,7 +704,7 @@ async def get_stream_by_number(number: int) -> StreamSchema:
 
 
 @router.post("/streams", response_model=StreamSchema)
-async def insert_stream(stream: StreamSchema) -> StreamSchema:
+async def insert_stream(stream: StreamSchema, current_user: dict = Depends(allow_only_admin)) -> StreamSchema:
     stream_repo = StreamRepository()
     database = PostgresDatabase()
 
@@ -674,7 +719,7 @@ async def insert_stream(stream: StreamSchema) -> StreamSchema:
 
 
 @router.delete("/streams/{number}", response_model=dict)
-async def delete_stream_by_number(number: int) -> dict:
+async def delete_stream_by_number(number: int, current_user: dict = Depends(allow_only_admin)) -> dict:
     stream_repo = StreamRepository()
     database = PostgresDatabase()
 
@@ -689,7 +734,8 @@ async def delete_stream_by_number(number: int) -> dict:
 
 
 @router.put("/streams/{number}", response_model=StreamSchema)
-async def update_stream_by_number(number: int, stream: StreamSchema) -> StreamSchema:
+async def update_stream_by_number(number: int, stream: StreamSchema
+                                  , current_user: dict = Depends(allow_only_admin)) -> StreamSchema:
     stream_repo = StreamRepository()
     database = PostgresDatabase()
 
@@ -732,7 +778,8 @@ async def get_courses_raiting_by_id(id: int) -> CoursesRaitingSchema:
 
 
 @router.post("/courses_raiting", response_model=CoursesRaitingSchema)
-async def insert_courses_raiting(course: CoursesRaitingSchema) -> CoursesRaitingSchema:
+async def insert_courses_raiting(course: CoursesRaitingSchema
+                                 , current_user: dict = Depends(allow_only_admin)) -> CoursesRaitingSchema:
     course_raiting_repo = CoursesRaitingRepository()
     database = PostgresDatabase()
 
@@ -749,7 +796,7 @@ async def insert_courses_raiting(course: CoursesRaitingSchema) -> CoursesRaiting
 
 
 @router.delete("/courses_raiting/{course_id}", response_model=dict)
-async def delete_courses_raiting_by_id(id: int) -> dict:
+async def delete_courses_raiting_by_id(id: int, current_user: dict = Depends(allow_only_admin)) -> dict:
     course_raiting_repo = CoursesRaitingRepository()
     database = PostgresDatabase()
 
@@ -764,7 +811,8 @@ async def delete_courses_raiting_by_id(id: int) -> dict:
 
 
 @router.put("/courses_raiting/{course_id}", response_model=CoursesRaitingSchema)
-async def update_courses_raiting_by_id(id: int, course: CoursesRaitingSchema) -> CoursesRaitingSchema:
+async def update_courses_raiting_by_id(id: int, course: CoursesRaitingSchema
+                                       , current_user: dict = Depends(allow_only_admin)) -> CoursesRaitingSchema:
     course_raiting_repo = CoursesRaitingRepository()
     database = PostgresDatabase()
 
@@ -809,7 +857,8 @@ async def get_teachers_raiting_by_id(id: int) -> TeachersRaitingSchema:
 
 
 @router.post("/teachers_raiting", response_model=TeachersRaitingSchema)
-async def insert_teachers_raiting(teacher: TeachersRaitingSchema) -> TeachersRaitingSchema:
+async def insert_teachers_raiting(teacher: TeachersRaitingSchema
+                                  , current_user: dict = Depends(allow_only_admin)) -> TeachersRaitingSchema:
     teacher_raiting_repo = TeachersRaitingRepository()
     database = PostgresDatabase()
 
@@ -827,7 +876,8 @@ async def insert_teachers_raiting(teacher: TeachersRaitingSchema) -> TeachersRai
 
 
 @router.delete("/teachers_raiting/{teacher_id}", response_model=dict)
-async def delete_teachers_raiting_by_id(id: int) -> dict:
+async def delete_teachers_raiting_by_id(id: int
+                                        , current_user: dict = Depends(allow_only_admin)) -> dict:
     teacher_raiting_repo = TeachersRaitingRepository()
     database = PostgresDatabase()
 
@@ -842,7 +892,8 @@ async def delete_teachers_raiting_by_id(id: int) -> dict:
 
 
 @router.put("/teachers_raiting/{teacher_id}", response_model=TeachersRaitingSchema)
-async def update_teachers_raiting_by_id(id: int, teacher: TeachersRaitingSchema) -> TeachersRaitingSchema:
+async def update_teachers_raiting_by_id(id: int, teacher: TeachersRaitingSchema
+                                        , current_user: dict = Depends(allow_only_admin)) -> TeachersRaitingSchema:
     teacher_raiting_repo = TeachersRaitingRepository()
     database = PostgresDatabase()
 
@@ -886,7 +937,8 @@ async def get_users_and_groups_by_id(id: int) -> UsersAndGroupsSchema:
 
 
 @router.post("/users_and_groups", response_model=UsersAndGroupsSchema)
-async def insert_users_and_groups(user: UsersAndGroupsSchema) -> UsersAndGroupsSchema:
+async def insert_users_and_groups(user: UsersAndGroupsSchema
+                                  , current_user: dict = Depends(allow_only_admin)) -> UsersAndGroupsSchema:
     users_and_groups_repo = UsersAndGroupsRepository()
     database = PostgresDatabase()
 
@@ -904,7 +956,8 @@ async def insert_users_and_groups(user: UsersAndGroupsSchema) -> UsersAndGroupsS
 
 
 @router.delete("/users_and_groups/{user_id}", response_model=dict)
-async def delete_user_and_groups_by_id(id: int) -> dict:
+async def delete_user_and_groups_by_id(id: int
+                                       , current_user: dict = Depends(allow_only_admin)) -> dict:
     users_and_groups_repo = UsersAndGroupsRepository()
     database = PostgresDatabase()
 
@@ -919,7 +972,8 @@ async def delete_user_and_groups_by_id(id: int) -> dict:
 
 
 @router.put("/users_and_groups/{user_id}", response_model=UsersAndGroupsSchema)
-async def update_users_and_groups_by_id(id: int, user: UsersAndGroupsSchema) -> UsersAndGroupsSchema:
+async def update_users_and_groups_by_id(id: int, user: UsersAndGroupsSchema
+                                        , current_user: dict = Depends(allow_only_admin)) -> UsersAndGroupsSchema:
     users_and_groups_repo = UsersAndGroupsRepository()
     database = PostgresDatabase()
 
@@ -964,7 +1018,8 @@ async def get_users_has_schedule_by_id(id: int) -> UsersHasScheduleSchema:
 
 
 @router.post("/user_has_schedule", response_model=UsersHasScheduleSchema)
-async def insert_user_has_schedule(user: UsersHasScheduleSchema) -> UsersHasScheduleSchema:
+async def insert_user_has_schedule(user: UsersHasScheduleSchema
+                                   , current_user: dict = Depends(allow_only_admin)) -> UsersHasScheduleSchema:
     users_has_schedule_repo = UsersHasScheduleRepository()
     database = PostgresDatabase()
 
@@ -983,7 +1038,8 @@ async def insert_user_has_schedule(user: UsersHasScheduleSchema) -> UsersHasSche
 
 
 @router.delete("/user_has_schedule/{user_id}", response_model=dict)
-async def delete_user_has_schedule_by_id(id: int) -> dict:
+async def delete_user_has_schedule_by_id(id: int
+                                         , current_user: dict = Depends(allow_only_admin)) -> dict:
     users_has_schedule_repo = UsersHasScheduleRepository()
     database = PostgresDatabase()
 
@@ -998,7 +1054,8 @@ async def delete_user_has_schedule_by_id(id: int) -> dict:
 
 
 @router.put("/user_has_schedule/{user_id}", response_model=UsersHasScheduleSchema)
-async def update_user_has_schedule_by_id(id: int, user: UsersHasScheduleSchema) -> UsersHasScheduleSchema:
+async def update_user_has_schedule_by_id(id: int, user: UsersHasScheduleSchema
+                                         , current_user: dict = Depends(allow_only_admin)) -> UsersHasScheduleSchema:
     users_has_schedule_repo = UsersHasScheduleRepository()
     database = PostgresDatabase()
 

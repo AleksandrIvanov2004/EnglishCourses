@@ -6,7 +6,8 @@ class UserSchema(BaseModel):
 
     id: int
     age: int
-    email: str
+    email: str = Field(pattern=r"^\S+@\S+\.\S+$", examples=["email@mail.ru"])
     password: str
     first_name: str
     second_name: str
+    role: str
